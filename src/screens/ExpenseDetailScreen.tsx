@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp } from '../contexts/AppContext';
 import { NavigationProps } from '../types';
+import { formatCurrency } from '../utils/currency';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import * as Haptics from 'expo-haptics';
@@ -16,11 +17,8 @@ const ExpenseDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) =
   const expenseId = route.params?.expenseId;
   const expense = expenses.find(e => e.id === expenseId);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
+  const formatAmount = (amount: number, currency: string = 'USD') => {
+    return formatCurrency(amount, currency);
   };
 
   const getCategoryIcon = (category: string) => {
@@ -130,7 +128,7 @@ const ExpenseDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) =
                 {expense.title}
               </Text>
               <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
-                {formatCurrency(expense.amount)}
+                {formatAmount(expense.amount, expense.currency)}
               </Text>
             </View>
           </View>
@@ -202,7 +200,7 @@ const ExpenseDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) =
                 </View>
                 <View style={styles.participantAmount}>
                   <Text style={[styles.amountText, { color: theme.colors.text }]}>
-                    {formatCurrency(participant.amount)}
+                    {formatAmount(participant.amount, expense.currency)}
                   </Text>
                   {participant.isSettled && (
                     <View style={[styles.settledBadge, { backgroundColor: theme.colors.success }]}>

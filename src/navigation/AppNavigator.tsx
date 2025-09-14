@@ -11,6 +11,7 @@ import GroupsScreen from '../screens/GroupsScreen';
 import FriendsScreen from '../screens/FriendsScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ProfileEditScreen from '../screens/ProfileEditScreen';
 import AddExpenseScreen from '../screens/AddExpenseScreen';
 import GroupDetailScreen from '../screens/GroupDetailScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
@@ -70,6 +71,11 @@ const GroupsStack = () => (
         presentation: 'modal',
       }}
     />
+    <Stack.Screen 
+      name="ExpenseDetail" 
+      component={ExpenseDetailScreen}
+      options={{ title: 'Expense Details' }}
+    />
   </Stack.Navigator>
 );
 
@@ -99,6 +105,14 @@ const ProfileStack = () => (
       name="ProfileMain" 
       component={ProfileScreen} 
       options={{ headerShown: false }}
+    />
+    <Stack.Screen 
+      name="ProfileEdit" 
+      component={ProfileEditScreen}
+      options={{ 
+        title: 'Edit Profile',
+        presentation: 'modal',
+      }}
     />
   </Stack.Navigator>
 );

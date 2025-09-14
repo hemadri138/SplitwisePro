@@ -6,6 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useApp } from '../contexts/AppContext';
 import { useFriends } from '../contexts/FriendsContext';
 import { NavigationProps } from '../types';
+import { formatCurrency } from '../utils/currency';
 import Card from '../components/Card';
 
 const GroupsScreen: React.FC<NavigationProps> = ({ navigation }) => {
@@ -20,11 +21,8 @@ const GroupsScreen: React.FC<NavigationProps> = ({ navigation }) => {
     setRefreshing(false);
   }, [refreshData]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(Math.abs(amount));
+  const formatAmount = (amount: number, currency: string = 'USD') => {
+    return formatCurrency(Math.abs(amount), currency);
   };
 
   return (
@@ -75,7 +73,7 @@ const GroupsScreen: React.FC<NavigationProps> = ({ navigation }) => {
                 {groupBalance && (
                   <View style={styles.groupBalance}>
                     <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>
-                      Total: {formatCurrency(groupBalance.totalAmount)}
+                      Total: {formatAmount(groupBalance.totalAmount, group.currency)}
                     </Text>
                   </View>
                 )}

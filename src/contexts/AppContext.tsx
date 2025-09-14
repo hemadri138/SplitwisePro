@@ -64,7 +64,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       
       setExpenses(expensesData);
       setGroups(groupsData);
-      setUser(userData);
+      
+      // Initialize user if none exists
+      if (!userData) {
+        const defaultUser: User = {
+          id: generateId(),
+          name: 'User',
+          email: 'user@example.com',
+          defaultCurrency: 'USD',
+          createdAt: new Date(),
+        };
+        await StorageService.saveUser(defaultUser);
+        setUser(defaultUser);
+      } else {
+        setUser(userData);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -142,6 +156,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         id: generateId(),
         createdAt: new Date(),
         updatedAt: new Date(),
+        currency: expenseData.currency || 'USD', // Default to USD if not provided
       };
       
       await StorageService.saveExpense(expense);
@@ -190,6 +205,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         id: generateId(),
         createdAt: new Date(),
         updatedAt: new Date(),
+        currency: groupData.currency || 'USD', // Default to USD if not provided
       };
       
       await StorageService.saveGroup(group);

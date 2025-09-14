@@ -1,105 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   Alert,
-  ScrollView,
-  Modal,
   Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp } from '../contexts/AppContext';
-import { useFriends } from '../contexts/FriendsContext';
-import { Group, Friend, Currency } from '../types';
-import { SUPPORTED_CURRENCIES, getDefaultCurrency } from '../utils/currency';
+import { User, Currency } from '../types';
+import { SUPPORTED_CURRENCIES, getCurrencyByCode } from '../utils/currency';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import * as Haptics from 'expo-haptics';
 
-interface FriendSelectionItemProps {
-  friend: Friend;
-  isSelected: boolean;
-  onToggle: (friendId: string) => void;
+interface ProfileEditScreenProps {
+  navigation: any;
 }
 
-const FriendSelectionItem: React.FC<FriendSelectionItemProps> = ({ friend, isSelected, onToggle }) => {
-  const { theme } = useTheme();
-
-  return (
-    <TouchableOpacity
-      style={[
-        styles.friendItem,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: isSelected ? theme.colors.primary : theme.colors.border,
-        }
-      ]}
-      onPress={() => onToggle(friend.id)}
-    >
-      <View style={styles.friendInfo}>
-        <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
-          {friend.avatarUrl ? (
-            <Text style={[styles.avatarText, { color: theme.colors.surface }]}>
-              {friend.name.charAt(0).toUpperCase()}
-            </Text>
-          ) : (
-            <Ionicons name="person" size={20} color={theme.colors.surface} />
-          )}
-        </View>
-        
-        <Text style={[styles.friendName, { color: theme.colors.text }]}>
-          {friend.name}
-        </Text>
-      </View>
-      
-      <View style={[
-        styles.checkbox,
-        {
-          backgroundColor: isSelected ? theme.colors.primary : 'transparent',
-          borderColor: theme.colors.primary,
-        }
-      ]}>
-        {isSelected && (
-          <Ionicons name="checkmark" size={16} color={theme.colors.surface} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-};
-
-const GroupCreationScreen: React.FC = ({ navigation }: any) => {
+const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => {
   const { theme, settings } = useTheme();
-  const { addGroup } = useApp();
-  const { friends } = useFriends();
+  const { user, updateUser } = useApp();
   
-  const [groupName, setGroupName] = useState('');
-  const [groupDescription, setGroupDescription] = useState('');
-  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(getDefaultCurrency());
-  const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [defaultCurrency, setDefaultCurrency] = useState<Currency | null>(null);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleFriendToggle = (friendId: string) => {
-    setSelectedFriends(prev => {
-      if (prev.includes(friendId)) {
-        return prev.filter(id => id !== friendId);
-      } else {
-        return [...prev, friendId];
+  useEffect(() => {
+    if (user) {
+      setName(user.name);
+      setEmail(user.email);
+      setAvatar(user.avatar || null);
+      
+      // Set default currency
+      if (user.defaultCurrency) {
+        const currency = getCurrencyByCode(user.defaultCurrency);
+        if (currency) {
+          setDefaultCurrency(currency);
+        }
       }
-    });
-    
-    if (settings.hapticFeedback) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  };
+  }, [user]);
 
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -122,7 +73,7 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setGroupPhoto(result.assets[0].uri);
+      setAvatar(result.assets[0].uri);
       if (settings.hapticFeedback) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
@@ -143,7 +94,7 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setGroupPhoto(result.assets[0].uri);
+      setAvatar(result.assets[0].uri);
       if (settings.hapticFeedback) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
@@ -152,8 +103,8 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
 
   const showImagePicker = () => {
     Alert.alert(
-      'Select Group Photo',
-      'Choose how you want to add a group photo',
+      'Select Photo',
+      'Choose how you want to add a photo',
       [
         { text: 'Camera', onPress: takePhoto },
         { text: 'Photo Library', onPress: pickImage },
@@ -162,81 +113,73 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
     );
   };
 
-  const handleCreateGroup = async () => {
-    if (!groupName.trim()) {
-      Alert.alert('Error', 'Please enter a group name');
+  const handleSave = async () => {
+    if (!name.trim()) {
+      Alert.alert('Error', 'Please enter your name');
       return;
     }
 
-    if (selectedFriends.length === 0) {
-      Alert.alert('Error', 'Please select at least one friend');
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email');
       return;
     }
 
     try {
       setIsLoading(true);
       
-      const groupData: Omit<Group, 'id' | 'createdAt' | 'updatedAt'> = {
-        name: groupName.trim(),
-        description: groupDescription.trim() || undefined,
-        members: [], // Will be populated with actual user data
-        friendIds: selectedFriends || [], // Ensure it's always an array
-        currency: selectedCurrency.code,
-        groupPhoto: groupPhoto || undefined,
-        color: getRandomColor(),
+      const updatedUser: User = {
+        ...user!,
+        name: name.trim(),
+        email: email.trim(),
+        avatar: avatar || undefined,
+        defaultCurrency: defaultCurrency?.code || undefined,
       };
 
-      await addGroup(groupData);
+      await updateUser(updatedUser);
       
       if (settings.hapticFeedback) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
       
-      navigation.goBack();
+      Alert.alert('Success', 'Profile updated successfully!', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create group');
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      console.error('Error updating profile:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getRandomColor = () => {
-    const colors = [
-      '#14B8A6', '#6366F1', '#F97316', '#10B981', 
-      '#F59E0B', '#EF4444', '#3B82F6', '#8B5CF6'
-    ];
-    return colors[Math.floor(Math.random() * colors.length)];
-  };
-
-  const renderFriend = ({ item }: { item: Friend }) => (
-    <FriendSelectionItem
-      friend={item}
-      isSelected={selectedFriends.includes(item.id)}
-      onToggle={handleFriendToggle}
-    />
-  );
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
           <Text style={[styles.title, { color: theme.colors.text }]}>
-            Create New Group
+            Edit Profile
           </Text>
+          <View style={styles.placeholder} />
         </View>
 
         <Card style={styles.formCard}>
-          {/* Group Photo */}
+          {/* Profile Photo */}
           <View style={styles.photoSection}>
             <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>
-              Group Photo (Optional)
+              Profile Photo
             </Text>
             <TouchableOpacity
               style={styles.photoContainer}
               onPress={showImagePicker}
             >
-              {groupPhoto ? (
-                <Image source={{ uri: groupPhoto }} style={styles.groupPhoto} />
+              {avatar ? (
+                <Image source={{ uri: avatar }} style={styles.photo} />
               ) : (
                 <View style={[styles.photoPlaceholder, { backgroundColor: theme.colors.primary }]}>
                   <Ionicons name="camera" size={32} color="white" />
@@ -247,32 +190,32 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
               </View>
             </TouchableOpacity>
             <Text style={[styles.photoHint, { color: theme.colors.textSecondary }]}>
-              Tap to add group photo
+              Tap to change photo
             </Text>
           </View>
 
           <Input
-            label="Group Name"
-            placeholder="Enter group name"
-            value={groupName}
-            onChangeText={setGroupName}
+            label="Name"
+            placeholder="Enter your name"
+            value={name}
+            onChangeText={setName}
             style={styles.input}
           />
           
           <Input
-            label="Description (Optional)"
-            placeholder="Enter group description"
-            value={groupDescription}
-            onChangeText={setGroupDescription}
-            multiline
-            numberOfLines={3}
+            label="Email"
+            placeholder="Enter your email"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
             style={styles.input}
           />
 
-          {/* Currency Selection */}
+          {/* Default Currency Selection */}
           <View style={styles.currencySection}>
             <Text style={[styles.currencyLabel, { color: theme.colors.text }]}>
-              Currency
+              Default Currency
             </Text>
             <TouchableOpacity
               style={[styles.currencySelector, { 
@@ -282,58 +225,38 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
               onPress={() => setShowCurrencyModal(true)}
             >
               <View style={styles.currencyInfo}>
-                <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
-                  {selectedCurrency.symbol}
-                </Text>
-                <View style={styles.currencyDetails}>
-                  <Text style={[styles.currencyCode, { color: theme.colors.text }]}>
-                    {selectedCurrency.code}
+                {defaultCurrency ? (
+                  <>
+                    <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
+                      {defaultCurrency.symbol}
+                    </Text>
+                    <View style={styles.currencyDetails}>
+                      <Text style={[styles.currencyCode, { color: theme.colors.text }]}>
+                        {defaultCurrency.code}
+                      </Text>
+                      <Text style={[styles.currencyName, { color: theme.colors.textSecondary }]}>
+                        {defaultCurrency.name}
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={[styles.currencyPlaceholder, { color: theme.colors.textSecondary }]}>
+                    Select default currency
                   </Text>
-                  <Text style={[styles.currencyName, { color: theme.colors.textSecondary }]}>
-                    {selectedCurrency.name}
-                  </Text>
-                </View>
+                )}
               </View>
               <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </Card>
 
-        <Card style={styles.friendsCard}>
-          <View style={styles.friendsHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Select Friends
-            </Text>
-            <Text style={[styles.selectedCount, { color: theme.colors.textSecondary }]}>
-              {selectedFriends.length} selected
-            </Text>
-          </View>
-
-          {friends.length > 0 ? (
-            <FlatList
-              data={friends}
-              renderItem={renderFriend}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              style={styles.friendsList}
-            />
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={48} color={theme.colors.textSecondary} />
-              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                No friends available. Add friends first to create a group.
-              </Text>
-            </View>
-          )}
-        </Card>
-
         <View style={styles.buttonContainer}>
           <Button
-            title="Create Group"
-            onPress={handleCreateGroup}
+            title="Save Changes"
+            onPress={handleSave}
             loading={isLoading}
-            disabled={!groupName.trim() || selectedFriends.length === 0}
-            style={styles.createButton}
+            disabled={!name.trim() || !email.trim()}
+            style={styles.saveButton}
           />
         </View>
       </ScrollView>
@@ -349,7 +272,7 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                Select Currency
+                Select Default Currency
               </Text>
               <TouchableOpacity
                 onPress={() => setShowCurrencyModal(false)}
@@ -359,22 +282,21 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
             
-            <FlatList
-              data={SUPPORTED_CURRENCIES}
-              keyExtractor={(item) => item.code}
-              renderItem={({ item }) => (
+            <ScrollView style={styles.currencyList}>
+              {SUPPORTED_CURRENCIES.map((currency) => (
                 <TouchableOpacity
+                  key={currency.code}
                   style={[
                     styles.currencyItem,
                     { 
-                      backgroundColor: selectedCurrency.code === item.code 
+                      backgroundColor: defaultCurrency?.code === currency.code 
                         ? theme.colors.primary + '20' 
                         : 'transparent',
                       borderColor: theme.colors.border 
                     }
                   ]}
                   onPress={() => {
-                    setSelectedCurrency(item);
+                    setDefaultCurrency(currency);
                     setShowCurrencyModal(false);
                     if (settings.hapticFeedback) {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -383,24 +305,23 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
                 >
                   <View style={styles.currencyItemInfo}>
                     <Text style={[styles.currencyItemSymbol, { color: theme.colors.primary }]}>
-                      {item.symbol}
+                      {currency.symbol}
                     </Text>
                     <View style={styles.currencyItemDetails}>
                       <Text style={[styles.currencyItemCode, { color: theme.colors.text }]}>
-                        {item.code}
+                        {currency.code}
                       </Text>
                       <Text style={[styles.currencyItemName, { color: theme.colors.textSecondary }]}>
-                        {item.name}
+                        {currency.name}
                       </Text>
                     </View>
                   </View>
-                  {selectedCurrency.code === item.code && (
+                  {defaultCurrency?.code === currency.code && (
                     <Ionicons name="checkmark" size={20} color={theme.colors.primary} />
                   )}
                 </TouchableOpacity>
-              )}
-              style={styles.currencyList}
-            />
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -417,38 +338,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 20,
   },
+  backButton: {
+    padding: 8,
+  },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  placeholder: {
+    width: 40,
   },
   formCard: {
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 24,
   },
   photoSection: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionLabel: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   photoContainer: {
     position: 'relative',
     marginBottom: 8,
   },
-  groupPhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  photo: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   photoPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -456,90 +388,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
   photoHint: {
-    fontSize: 12,
+    fontSize: 14,
   },
   input: {
-    marginBottom: 16,
-  },
-  friendsCard: {
-    padding: 20,
-    marginBottom: 24,
-  },
-  friendsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  selectedCount: {
-    fontSize: 14,
-  },
-  friendsList: {
-    maxHeight: 300,
-  },
-  friendItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    marginBottom: 8,
-  },
-  friendInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  friendName: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 12,
-    lineHeight: 24,
-  },
-  buttonContainer: {
-    paddingBottom: 32,
-  },
-  createButton: {
     marginBottom: 16,
   },
   currencySection: {
@@ -579,6 +437,15 @@ const styles = StyleSheet.create({
   currencyName: {
     fontSize: 14,
     marginTop: 2,
+  },
+  currencyPlaceholder: {
+    fontSize: 16,
+  },
+  buttonContainer: {
+    paddingBottom: 32,
+  },
+  saveButton: {
+    marginBottom: 16,
   },
   modalOverlay: {
     flex: 1,
@@ -641,4 +508,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default GroupCreationScreen;
+export default ProfileEditScreen;

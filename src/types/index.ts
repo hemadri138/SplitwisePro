@@ -3,6 +3,7 @@ export interface User {
   name: string;
   email: string;
   avatar?: string;
+  defaultCurrency?: string; // Default currency code for the user
   createdAt: Date;
 }
 
@@ -21,6 +22,8 @@ export interface Group {
   description?: string;
   members: GroupMember[];
   friendIds?: string[]; // IDs of friends in this group (optional for backward compatibility)
+  currency: string; // Currency code (e.g., 'USD', 'EUR', 'GBP')
+  groupPhoto?: string; // Group profile photo URL
   createdAt: Date;
   updatedAt: Date;
   color: string;
@@ -44,6 +47,7 @@ export interface Expense {
   groupId?: string;
   participants: ExpenseParticipant[];
   splitType: SplitType;
+  currency: string; // Currency code (e.g., 'USD', 'EUR', 'GBP')
   createdAt: Date;
   updatedAt: Date;
   isSettled: boolean;
@@ -75,6 +79,13 @@ export type ExpenseCategory =
   | 'travel'
   | 'education'
   | 'other';
+
+export interface Currency {
+  code: string;
+  name: string;
+  symbol: string;
+  locale: string;
+}
 
 export interface Balance {
   userId: string;

@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Entypo, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp } from '../contexts/AppContext';
 import { useFriends } from '../contexts/FriendsContext';
-import { NavigationProps, ExpenseCategory, SplitType, ExpenseSplit } from '../types';
+import { NavigationProps, ExpenseCategory, SplitType, ExpenseSplit, Currency } from '../types';
+import { SUPPORTED_CURRENCIES, getDefaultCurrency, formatCurrency } from '../utils/currency';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
@@ -40,6 +43,10 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
   );
   const [customSplits, setCustomSplits] = useState<ExpenseSplit[]>([]);
   const [payer, setPayer] = useState<string>(existingExpense?.paidBy || user?.id || 'current-user');
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(
+    existingExpense ? SUPPORTED_CURRENCIES.find(c => c.code === existingExpense.currency) || getDefaultCurrency() : getDefaultCurrency()
+  );
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const categories: { 
@@ -147,19 +154,21 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
           groupId: selectedGroup || undefined,
           participants: expenseParticipants,
           splitType,
+          currency: selectedCurrency.code,
         });
       } else {
-      await addExpense({
-        title: title.trim(),
-        amount: expenseAmount,
-        category,
-        description: description.trim() || undefined,
+        await addExpense({
+          title: title.trim(),
+          amount: expenseAmount,
+          category,
+          description: description.trim() || undefined,
           paidBy: payer,
-        groupId: selectedGroup || undefined,
-        participants: expenseParticipants,
-        splitType,
-        isSettled: false,
-      });
+          groupId: selectedGroup || undefined,
+          participants: expenseParticipants,
+          splitType,
+          currency: selectedCurrency.code,
+          isSettled: false,
+        });
       }
 
       if (settings.hapticFeedback) {
@@ -222,6 +231,35 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
               keyboardType="numeric"
               leftIcon="cash"
             />
+
+            {/* Currency Selection */}
+            <View style={styles.currencySection}>
+              <Text style={[styles.currencyLabel, { color: theme.colors.text }]}>
+                Currency
+              </Text>
+              <TouchableOpacity
+                style={[styles.currencySelector, { 
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border 
+                }]}
+                onPress={() => setShowCurrencyModal(true)}
+              >
+                <View style={styles.currencyInfo}>
+                  <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
+                    {selectedCurrency.symbol}
+                  </Text>
+                  <View style={styles.currencyDetails}>
+                    <Text style={[styles.currencyCode, { color: theme.colors.text }]}>
+                      {selectedCurrency.code}
+                    </Text>
+                    <Text style={[styles.currencyName, { color: theme.colors.textSecondary }]}>
+                      {selectedCurrency.name}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
             
             <Input
               label="Description (Optional)"
@@ -469,6 +507,73 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Currency Selection Modal */}
+      <Modal
+        visible={showCurrencyModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCurrencyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                Select Currency
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowCurrencyModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <FlatList
+              data={SUPPORTED_CURRENCIES}
+              keyExtractor={(item) => item.code}
+              renderItem={({ item }: { item: Currency }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.currencyItem,
+                    { 
+                      backgroundColor: selectedCurrency.code === item.code 
+                        ? theme.colors.primary + '20' 
+                        : 'transparent',
+                      borderColor: theme.colors.border 
+                    }
+                  ]}
+                  onPress={() => {
+                    setSelectedCurrency(item);
+                    setShowCurrencyModal(false);
+                    if (settings.hapticFeedback) {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }
+                  }}
+                >
+                  <View style={styles.currencyItemInfo}>
+                    <Text style={[styles.currencyItemSymbol, { color: theme.colors.primary }]}>
+                      {item.symbol}
+                    </Text>
+                    <View style={styles.currencyItemDetails}>
+                      <Text style={[styles.currencyItemCode, { color: theme.colors.text }]}>
+                        {item.code}
+                      </Text>
+                      <Text style={[styles.currencyItemName, { color: theme.colors.textSecondary }]}>
+                        {item.name}
+                      </Text>
+                    </View>
+                  </View>
+                  {selectedCurrency.code === item.code && (
+                    <Ionicons name="checkmark" size={20} color={theme.colors.primary} />
+                  )}
+                </TouchableOpacity>
+              )}
+              style={styles.currencyList}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -596,6 +701,103 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+  },
+  currencySection: {
+    marginBottom: 16,
+  },
+  currencyLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  currencySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  currencyInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  currencySymbol: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginRight: 12,
+    minWidth: 30,
+  },
+  currencyDetails: {
+    flex: 1,
+  },
+  currencyCode: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  currencyName: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  currencyList: {
+    maxHeight: 400,
+  },
+  currencyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  currencyItemInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  currencyItemSymbol: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginRight: 12,
+    minWidth: 30,
+  },
+  currencyItemDetails: {
+    flex: 1,
+  },
+  currencyItemCode: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  currencyItemName: {
+    fontSize: 14,
+    marginTop: 2,
   },
 });
 

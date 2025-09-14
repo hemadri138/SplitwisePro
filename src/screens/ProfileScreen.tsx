@@ -1,12 +1,15 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useApp } from '../contexts/AppContext';
+import { getCurrencyByCode } from '../utils/currency';
 
-const ProfileScreen: React.FC = () => {
+const ProfileScreen: React.FC = ({ navigation }: any) => {
   const { theme, isDark, toggleTheme, settings, updateSettings } = useTheme();
+  const { user } = useApp();
 
   const handleToggleHaptic = (value: boolean) => {
     updateSettings({ hapticFeedback: value });
@@ -14,6 +17,18 @@ const ProfileScreen: React.FC = () => {
 
   const handleToggleNotifications = (value: boolean) => {
     updateSettings({ notifications: value });
+  };
+
+  const handleEditProfile = () => {
+    navigation.navigate('ProfileEdit');
+  };
+
+  const getDefaultCurrencyDisplay = () => {
+    if (user?.defaultCurrency) {
+      const currency = getCurrencyByCode(user.defaultCurrency);
+      return currency ? `${currency.symbol} ${currency.code}` : 'Not set';
+    }
+    return 'Not set';
   };
 
   return (
@@ -28,17 +43,29 @@ const ProfileScreen: React.FC = () => {
 
         {/* User Info */}
         <View style={[styles.userCard, { backgroundColor: theme.colors.surface }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
-            <Ionicons name="person" size={32} color="white" />
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={[styles.userName, { color: theme.colors.text }]}>
-              John Doe
-            </Text>
-            <Text style={[styles.userEmail, { color: theme.colors.textSecondary }]}>
-              john.doe@example.com
-            </Text>
-          </View>
+          <TouchableOpacity style={styles.userInfoContainer} onPress={handleEditProfile}>
+            <View style={styles.avatarContainer}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
+                  <Ionicons name="person" size={32} color="white" />
+                </View>
+              )}
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={[styles.userName, { color: theme.colors.text }]}>
+                {user?.name || 'User Name'}
+              </Text>
+              <Text style={[styles.userEmail, { color: theme.colors.textSecondary }]}>
+                {user?.email || 'user@example.com'}
+              </Text>
+              <Text style={[styles.userCurrency, { color: theme.colors.textSecondary }]}>
+                Default Currency: {getDefaultCurrencyDisplay()}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         {/* Settings */}
@@ -95,6 +122,23 @@ const ProfileScreen: React.FC = () => {
                 trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
                 thumbColor={settings.notifications ? theme.colors.surface : theme.colors.surface}
               />
+            </TouchableOpacity>
+
+            <View style={[styles.settingDivider, { backgroundColor: theme.colors.border }]} />
+
+            <TouchableOpacity style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <Ionicons name="cash-outline" size={24} color={theme.colors.text} />
+                <Text style={[styles.settingText, { color: theme.colors.text }]}>
+                  Default Currency
+                </Text>
+              </View>
+              <View style={styles.settingRight}>
+                <Text style={[styles.settingValue, { color: theme.colors.textSecondary }]}>
+                  {getDefaultCurrencyDisplay()}
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -158,9 +202,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
     borderRadius: 16,
     marginBottom: 24,
     shadowColor: '#000',
@@ -169,13 +210,20 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  userInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+  },
+  avatarContainer: {
+    marginRight: 16,
+  },
   avatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
   },
   userInfo: {
     flex: 1,
@@ -187,6 +235,10 @@ const styles = StyleSheet.create({
   },
   userEmail: {
     fontSize: 14,
+    marginBottom: 2,
+  },
+  userCurrency: {
+    fontSize: 12,
   },
   section: {
     marginBottom: 24,
@@ -216,9 +268,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  settingRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   settingText: {
     fontSize: 16,
     marginLeft: 12,
+  },
+  settingValue: {
+    fontSize: 16,
+    marginRight: 8,
   },
   settingDivider: {
     height: 1,

@@ -7,6 +7,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useApp } from '../contexts/AppContext';
 import { useFriends } from '../contexts/FriendsContext';
 import { NavigationProps } from '../types';
+import { formatCurrency } from '../utils/currency';
 import Card from '../components/Card';
 import Button from '../components/Button';
 
@@ -20,11 +21,8 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
   const groupBalance = groupBalances.find(gb => gb.groupId === groupId);
   const groupExpenses = getExpensesByGroup(groupId);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(Math.abs(amount));
+  const formatAmount = (amount: number, currency: string = 'USD') => {
+    return formatCurrency(Math.abs(amount), currency);
   };
 
   const getBalanceColor = (amount: number) => {
@@ -34,8 +32,9 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
   };
 
   const getBalanceText = (amount: number, name: string) => {
-    if (amount > 0) return `${name} owes ${formatCurrency(amount)}`;
-    if (amount < 0) return `${name} is owed ${formatCurrency(Math.abs(amount))}`;
+    const currency = group?.currency || 'USD';
+    if (amount > 0) return `${name} owes ${formatAmount(amount, currency)}`;
+    if (amount < 0) return `${name} is owed ${formatAmount(Math.abs(amount), currency)}`;
     return `${name} is settled up`;
   };
 
@@ -255,7 +254,11 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
           {groupExpenses.length > 0 ? (
             <View style={styles.expensesList}>
               {groupExpenses.slice(0, 5).map((expense) => (
-                <View key={expense.id} style={styles.expenseItem}>
+                <TouchableOpacity 
+                  key={expense.id} 
+                  style={styles.expenseItem}
+                  onPress={() => navigation.navigate('ExpenseDetail', { expenseId: expense.id })}
+                >
                   <View style={styles.expenseInfo}>
                     <Text style={[styles.expenseTitle, { color: theme.colors.text }]}>
                       {expense.title}
@@ -265,9 +268,9 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
                     </Text>
                   </View>
                   <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
-                    {formatCurrency(expense.amount)}
-        </Text>
-                </View>
+                    {formatAmount(expense.amount, expense.currency)}
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
           ) : (

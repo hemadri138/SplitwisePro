@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp } from '../contexts/AppContext';
 import { NavigationProps } from '../types';
+import { formatCurrency } from '../utils/currency';
 import FloatingActionButton from '../components/FloatingActionButton';
 import Card from '../components/Card';
 
@@ -34,11 +35,8 @@ const HomeScreen: React.FC<NavigationProps> = ({ navigation }) => {
   const categoryTotals = getExpensesByCategory();
   const totalThisMonth = Object.values(categoryTotals).reduce((sum, amount) => sum + amount, 0);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(Math.abs(amount));
+  const formatAmount = (amount: number, currency: string = 'USD') => {
+    return formatCurrency(Math.abs(amount), currency);
   };
 
   return (
@@ -69,7 +67,7 @@ const HomeScreen: React.FC<NavigationProps> = ({ navigation }) => {
         <Card style={styles.statsContainer}>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-              {formatCurrency(totalBalance)}
+              {formatAmount(totalBalance)}
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Total Balance</Text>
           </View>
@@ -81,7 +79,7 @@ const HomeScreen: React.FC<NavigationProps> = ({ navigation }) => {
           <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: theme.colors.success }]}>
-              {formatCurrency(totalThisMonth)}
+              {formatAmount(totalThisMonth)}
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>This Month</Text>
           </View>
@@ -117,7 +115,7 @@ const HomeScreen: React.FC<NavigationProps> = ({ navigation }) => {
                     </Text>
                   </View>
                   <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
-                    {formatCurrency(expense.amount)}
+                    {formatAmount(expense.amount, expense.currency)}
                   </Text>
                 </View>
                 <Text style={[styles.expenseDate, { color: theme.colors.textSecondary }]}>
