@@ -9,7 +9,7 @@ interface AppContextType {
   user: User | null;
   balances: Balance[];
   groupBalances: GroupBalance[];
-  
+   
   // Loading states
   isLoading: boolean;
   

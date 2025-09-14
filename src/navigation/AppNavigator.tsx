@@ -106,14 +106,6 @@ const ProfileStack = () => (
       component={ProfileScreen} 
       options={{ headerShown: false }}
     />
-    <Stack.Screen 
-      name="ProfileEdit" 
-      component={ProfileEditScreen}
-      options={{ 
-        title: 'Edit Profile',
-        presentation: 'modal',
-      }}
-    />
   </Stack.Navigator>
 );
 
