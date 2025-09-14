@@ -1,20 +1,32 @@
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { AppProvider } from './src/contexts/AppContext';
+import { FriendsProvider } from './src/contexts/FriendsContext';
+import AppNavigator from './src/navigation/AppNavigator';
 
-export default function App() {
+function AppContent() {
+  const { isDark } = useTheme();
+  
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <AppNavigator />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <AppProvider>
+          <FriendsProvider>
+            <AppContent />
+          </FriendsProvider>
+        </AppProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
+  );
+}
