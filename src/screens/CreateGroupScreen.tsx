@@ -58,6 +58,7 @@ const CreateGroupScreen: React.FC<NavigationProps> = ({ navigation }) => {
           joinedAt: new Date(),
         }] : [],
         color,
+        currency: user?.defaultCurrency || 'USD',
       });
 
       Alert.alert('Success', 'Group created successfully!', [
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   colorGrid: {
     flexDirection: 'row',

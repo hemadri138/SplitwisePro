@@ -5,9 +5,6 @@ import Animated, {
   useAnimatedStyle, 
   withSpring,
   withTiming,
-  interpolate,
-  interpolateColor,
-  runOnJS,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -41,7 +38,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
     return {
       transform: [
         { rotate: `${rotationValue.value}deg` },
-        { scale: interpolate(expandValue.value, [0, 1], [1, 0.9]) },
+        { scale: expandValue.value === 1 ? 0.5 : 1 },
       ],
     };
   });
@@ -57,7 +54,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
     return {
       transform: [
         { scale: expandValue.value },
-        { translateY: interpolate(expandValue.value, [0, 1], [20, 0]) },
+        { translateY: expandValue.value === 1 ? 0 : 20 },
       ],
       opacity: expandValue.value,
     };
@@ -121,7 +118,12 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
             activeOpacity={0.8}
           >
             <Ionicons name={action.icon} size={20} color="white" />
-            <Text style={styles.actionLabel}>{action.label}</Text>
+            <Text 
+              style={styles.actionLabel}
+              numberOfLines={1}
+            >
+              {action.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </Animated.View>
@@ -186,6 +188,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     overflow: 'hidden',
+    // numberOfLines: 1,
+    minWidth: 100,
+    maxWidth: 150,
   },
   mainButton: {
     width: 56,

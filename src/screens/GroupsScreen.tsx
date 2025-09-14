@@ -11,7 +11,7 @@ import Card from '../components/Card';
 
 const GroupsScreen: React.FC<NavigationProps> = ({ navigation }) => {
   const { theme } = useTheme();
-  const { groups, groupBalances, refreshData } = useApp();
+  const { groups, groupBalances, refreshData, user } = useApp();
   const { friends } = useFriends();
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -21,8 +21,9 @@ const GroupsScreen: React.FC<NavigationProps> = ({ navigation }) => {
     setRefreshing(false);
   }, [refreshData]);
 
-  const formatAmount = (amount: number, currency: string = 'USD') => {
-    return formatCurrency(Math.abs(amount), currency);
+  const formatAmount = (amount: number, currency?: string) => {
+    const defaultCurrency = user?.defaultCurrency || 'USD';
+    return formatCurrency(Math.abs(amount), currency || defaultCurrency);
   };
 
   return (
@@ -75,6 +76,49 @@ const GroupsScreen: React.FC<NavigationProps> = ({ navigation }) => {
                     <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>
                       Total: {formatAmount(groupBalance.totalAmount, group.currency)}
                     </Text>
+                    
+                    {/* Detailed Balances */}
+                    <View style={styles.balanceDetails}>
+                      {groupBalance.balances.map((balance, index) => {
+                        const isOwed = balance.amount < 0;
+                        const isOwing = balance.amount > 0;
+                        
+                        return (
+                          <View key={index} style={styles.balanceItem}>
+                            <View style={styles.balanceInfo}>
+                              <Text style={[styles.balanceName, { color: theme.colors.text }]}>
+                                {balance.name}
+                              </Text>
+                              <View style={styles.balanceStatus}>
+                                {isOwed && (
+                                  <View style={[styles.statusBadge, { backgroundColor: theme.colors.success + '20' }]}>
+                                    <Text style={[styles.statusText, { color: theme.colors.success }]}>
+                                      Owed
+                                    </Text>
+                                  </View>
+                                )}
+                                {isOwing && (
+                                  <View style={[styles.statusBadge, { backgroundColor: theme.colors.warning + '20' }]}>
+                                    <Text style={[styles.statusText, { color: theme.colors.warning }]}>
+                                      Owes
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                            <Text style={[
+                              styles.balanceAmount, 
+                              { 
+                                color: isOwed ? theme.colors.success : 
+                                       isOwing ? theme.colors.warning : theme.colors.textSecondary 
+                              }
+                            ]}>
+                              {isOwed ? '+' : ''}{formatAmount(balance.amount, group.currency)}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
                   </View>
                 )}
               </Card>
@@ -164,11 +208,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   groupBalance: {
-    marginTop: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   balanceLabel: {
     fontSize: 12,
     fontWeight: '500',
+    marginBottom: 8,
+  },
+  balanceDetails: {
+    gap: 8,
+  },
+  balanceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  balanceInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  balanceName: {
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+  },
+  balanceStatus: {
+    marginRight: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  balanceAmount: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'right',
   },
   emptyStateTitle: {
     fontSize: 20,

@@ -13,8 +13,6 @@ import Animated, {
   useAnimatedStyle, 
   withSpring,
   withTiming,
-  interpolate,
-  interpolateColor,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -66,11 +64,7 @@ const Input = forwardRef<TextInput, InputProps>(({
   const animatedContainerStyle = useAnimatedStyle(() => {
     return {
       transform: [{ scale: focusScale.value }],
-      borderColor: interpolate(
-        borderColor.value,
-        [0, 1],
-        [theme.colors.border, theme.colors.primary]
-      ),
+      borderColor: borderColor.value === 1 ? theme.colors.primary : theme.colors.border,
     };
   });
 

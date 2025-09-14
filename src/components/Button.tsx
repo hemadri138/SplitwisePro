@@ -5,8 +5,6 @@ import Animated, {
   useAnimatedStyle, 
   withSpring,
   withTiming,
-  interpolate,
-  interpolateColor,
 } from 'react-native-reanimated';
 import { useTheme } from '../contexts/ThemeContext';
 import * as Haptics from 'expo-haptics';

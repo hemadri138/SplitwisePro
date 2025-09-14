@@ -13,7 +13,7 @@ import Button from '../components/Button';
 
 const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
   const { theme, settings } = useTheme();
-  const { groups, groupBalances, getExpensesByGroup, user, addMemberToGroup, removeMemberFromGroup } = useApp();
+  const { groups, groupBalances, getExpensesByGroup, user, addMemberToGroup, removeMemberFromGroup, deleteGroup } = useApp();
   const { friends, getFriendById } = useFriends();
   
   const groupId = route.params?.groupId;
@@ -21,8 +21,9 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
   const groupBalance = groupBalances.find(gb => gb.groupId === groupId);
   const groupExpenses = getExpensesByGroup(groupId);
 
-  const formatAmount = (amount: number, currency: string = 'USD') => {
-    return formatCurrency(Math.abs(amount), currency);
+  const formatAmount = (amount: number, currency?: string) => {
+    const defaultCurrency = user?.defaultCurrency || 'USD';
+    return formatCurrency(Math.abs(amount), currency || defaultCurrency);
   };
 
   const getBalanceColor = (amount: number) => {
@@ -97,6 +98,34 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
     );
   };
 
+  const handleDeleteGroup = () => {
+    Alert.alert(
+      'Delete Group',
+      `Are you sure you want to delete "${group?.name}"? This action cannot be undone and will also delete all associated expenses.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteGroup(groupId);
+              if (settings.hapticFeedback) {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              }
+              Alert.alert('Success', 'Group deleted successfully', [
+                { text: 'OK', onPress: () => navigation.goBack() }
+              ]);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete group. Please try again.');
+              console.error('Error deleting group:', error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (!group) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -128,12 +157,20 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
               {group.name}
             </Text>
           </View>
-          <TouchableOpacity 
-            style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => navigation.navigate('AddExpense', { groupId: group.id })}
-          >
-            <Ionicons name="add" size={20} color="white" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: theme.colors.error }]}
+              onPress={() => handleDeleteGroup()}
+            >
+              <Ionicons name="trash" size={20} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+              onPress={() => navigation.navigate('AddExpense', { groupId: group.id })}
+            >
+              <Ionicons name="add" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Group Info */}
@@ -170,7 +207,7 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
         {groupBalance && groupBalance.balances.length > 0 && (
           <Card style={styles.balanceCard}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Balance Summary
+              Who Owes Who
             </Text>
             <View style={styles.balanceList}>
               {groupBalance.balances.map((balance) => (
@@ -181,13 +218,24 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
                         {balance.name.charAt(0).toUpperCase()}
                       </Text>
                     </View>
-                    <Text style={[styles.balanceName, { color: theme.colors.text }]}>
-                      {balance.name}
+                    <View style={styles.balanceDetails}>
+                      <Text style={[styles.balanceName, { color: theme.colors.text }]}>
+                        {balance.name}
+                      </Text>
+                      <Text style={[styles.balanceStatus, { color: getBalanceColor(balance.amount) }]}>
+                        {getBalanceText(balance.amount, balance.name)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.balanceAmountContainer, { 
+                    backgroundColor: balance.amount > 0 ? theme.colors.error + '15' : 
+                                   balance.amount < 0 ? theme.colors.success + '15' : 
+                                   theme.colors.textSecondary + '15' 
+                  }]}>
+                    <Text style={[styles.balanceAmount, { color: getBalanceColor(balance.amount) }]}>
+                      {formatAmount(Math.abs(balance.amount), group?.currency)}
                     </Text>
                   </View>
-                  <Text style={[styles.balanceAmount, { color: getBalanceColor(balance.amount) }]}>
-                    {getBalanceText(balance.amount, balance.name)}
-                  </Text>
                 </View>
               ))}
             </View>
@@ -324,6 +372,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   addButton: {
     width: 40,
     height: 40,
@@ -381,24 +440,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   avatarText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
+  },
+  balanceDetails: {
+    flex: 1,
   },
   balanceName: {
     fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  balanceStatus: {
+    fontSize: 12,
     fontWeight: '500',
+  },
+  balanceAmountContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 80,
+    alignItems: 'center',
   },
   balanceAmount: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   membersCard: {
     padding: 16,

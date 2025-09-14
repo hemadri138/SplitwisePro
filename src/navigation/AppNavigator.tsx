@@ -16,6 +16,7 @@ import AddExpenseScreen from '../screens/AddExpenseScreen';
 import GroupDetailScreen from '../screens/GroupDetailScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
 import CreateGroupScreen from '../screens/CreateGroupScreen';
+import AllExpensesScreen from '../screens/AllExpensesScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -33,12 +34,18 @@ const HomeStack = () => (
       options={{ 
         title: 'Add Expense',
         presentation: 'modal',
+        headerShown: false
       }}
     />
     <Stack.Screen 
       name="ExpenseDetail" 
       component={ExpenseDetailScreen}
-      options={{ title: 'Expense Details' }}
+      options={{ title: 'Expense Details',headerShown: false }}
+    />
+    <Stack.Screen 
+      name="AllExpenses" 
+      component={AllExpensesScreen}
+      options={{ title: 'All Expenses', headerShown: false }}
     />
   </Stack.Navigator>
 );
@@ -56,12 +63,13 @@ const GroupsStack = () => (
       options={{ 
         title: 'Create Group',
         presentation: 'modal',
+        headerShown: false,
       }}
     />
     <Stack.Screen 
       name="GroupDetail" 
       component={GroupDetailScreen}
-      options={{ title: 'Group Details' }}
+      options={{ title: 'Group Details', headerShown: false  }}
     />
     <Stack.Screen 
       name="AddExpense" 
@@ -69,12 +77,13 @@ const GroupsStack = () => (
       options={{ 
         title: 'Add Expense',
         presentation: 'modal',
+        headerShown: false
       }}
     />
     <Stack.Screen 
       name="ExpenseDetail" 
       component={ExpenseDetailScreen}
-      options={{ title: 'Expense Details' }}
+      options={{ title: 'Expense Details', headerShown: false }}
     />
   </Stack.Navigator>
 );
@@ -105,6 +114,15 @@ const ProfileStack = () => (
       name="ProfileMain" 
       component={ProfileScreen} 
       options={{ headerShown: false }}
+    />
+    <Stack.Screen 
+      name="ProfileEdit" 
+      component={ProfileEditScreen}
+      options={{ 
+        title: 'Edit Profile',
+        presentation: 'modal',
+        headerShown: false,
+      }}
     />
   </Stack.Navigator>
 );

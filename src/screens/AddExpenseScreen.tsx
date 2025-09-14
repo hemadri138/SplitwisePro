@@ -30,13 +30,16 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
   
   const expenseId = route.params?.expenseId;
   const editMode = route.params?.editMode;
+  const groupId = route.params?.groupId; // Get groupId from navigation params
   const existingExpense = editMode && expenseId ? expenses.find(e => e.id === expenseId) : null;
   
   const [title, setTitle] = useState(existingExpense?.title || '');
   const [amount, setAmount] = useState(existingExpense?.amount.toString() || '');
   const [description, setDescription] = useState(existingExpense?.description || '');
   const [category, setCategory] = useState<ExpenseCategory>(existingExpense?.category || 'other');
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(existingExpense?.groupId || null);
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(
+    existingExpense?.groupId || groupId || null
+  );
   const [splitType, setSplitType] = useState<SplitType>(existingExpense?.splitType || 'equal');
   const [participants, setParticipants] = useState<string[]>(
     existingExpense ? existingExpense.participants.map(p => p.userId) : []
@@ -123,6 +126,15 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
         Alert.alert('Error', 'Custom split amounts must equal the total expense amount');
         return;
       }
+      
+      // Check if all participants have custom split amounts
+      const missingSplits = participants.filter(participantId => 
+        !customSplits.some(split => split.participantId === participantId)
+      );
+      if (missingSplits.length > 0) {
+        Alert.alert('Error', 'Please enter split amounts for all participants');
+        return;
+      }
     }
 
     try {
@@ -195,6 +207,23 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
     );
   };
 
+  const initializeCustomSplits = () => {
+    if (splitType === 'custom' && participants.length > 0) {
+      const newCustomSplits: ExpenseSplit[] = participants.map(participantId => {
+        const existingSplit = customSplits.find(split => split.participantId === participantId);
+        return existingSplit || { participantId, amount: 0 };
+      });
+      setCustomSplits(newCustomSplits);
+    }
+  };
+
+  // Initialize custom splits when switching to custom mode or when participants change
+  React.useEffect(() => {
+    if (splitType === 'custom') {
+      initializeCustomSplits();
+    }
+  }, [splitType, participants]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <KeyboardAvoidingView 
@@ -223,14 +252,35 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
               leftIcon="receipt"
             />
             
-            <Input
-              label="Amount"
-              placeholder="0.00"
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="numeric"
-              leftIcon="cash"
-            />
+            <View style={styles.amountContainer}>
+              <Text style={[styles.amountLabel, { color: theme.colors.text }]}>
+                Amount
+              </Text>
+              <View style={[styles.amountInputContainer, { 
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border 
+              }]}>
+                <View style={[styles.currencySymbolContainer, { 
+                  backgroundColor: theme.colors.primary + '15',
+                  borderRightWidth: 1,
+                  borderRightColor: theme.colors.border,
+                  marginRight: 0,
+                  borderRadius: 0,
+                }]}>
+                  <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
+                    {selectedCurrency.symbol}
+                  </Text>
+                </View>
+                <Input
+                  placeholder="0.00"
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="numeric"
+                  style={styles.amountInput}
+                  leftIcon="cash"
+                />
+              </View>
+            </View>
 
             {/* Currency Selection */}
             <View style={styles.currencySection}>
@@ -245,9 +295,11 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
                 onPress={() => setShowCurrencyModal(true)}
               >
                 <View style={styles.currencyInfo}>
-                  <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
-                    {selectedCurrency.symbol}
-                  </Text>
+                  <View style={[styles.currencySymbolContainer, { backgroundColor: theme.colors.primary + '15' }]}>
+                    <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
+                      {selectedCurrency.symbol}
+                    </Text>
+                  </View>
                   <View style={styles.currencyDetails}>
                     <Text style={[styles.currencyCode, { color: theme.colors.text }]}>
                       {selectedCurrency.code}
@@ -317,7 +369,7 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
           {groups.length > 0 && (
             <Card style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Group (Optional)
+                Group
               </Text>
               
               <View style={styles.groupList}>
@@ -331,6 +383,11 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
                   ]}
                   onPress={() => setSelectedGroup(null)}
                 >
+                  <Ionicons 
+                    name="person" 
+                    size={20} 
+                    color={selectedGroup === null ? 'white' : theme.colors.textSecondary} 
+                  />
                   <Text style={[
                     styles.groupLabel,
                     { color: selectedGroup === null ? 'white' : theme.colors.text }
@@ -351,6 +408,7 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
                     ]}
                     onPress={() => setSelectedGroup(group.id)}
                   >
+                    <View style={[styles.groupColorIndicator, { backgroundColor: group.color }]} />
                     <Text style={[
                       styles.groupLabel,
                       { color: selectedGroup === group.id ? 'white' : theme.colors.text }
@@ -451,6 +509,106 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
                     Custom Split
                   </Text>
                 </TouchableOpacity>
+              </View>
+            </Card>
+          )}
+
+          {/* Custom Split Amounts */}
+          {selectedGroup && participants.length > 0 && splitType === 'custom' && (
+            <Card style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Custom Split Amounts
+              </Text>
+              <View style={styles.customSplitHeader}>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary }]}>
+                  Enter the amount each person should pay
+                </Text>
+                <TouchableOpacity
+                  style={[styles.fillEqualButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => {
+                    const equalAmount = (parseFloat(amount) || 0) / participants.length;
+                    const newCustomSplits = participants.map(participantId => ({
+                      participantId,
+                      amount: equalAmount
+                    }));
+                    setCustomSplits(newCustomSplits);
+                  }}
+                >
+                  <Ionicons name="calculator" size={16} color="white" />
+                  <Text style={styles.fillEqualText}>Fill Equal</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.customSplitList}>
+                {getAvailableParticipants()
+                  .filter(participant => participants.includes(participant.id))
+                  .map((participant) => {
+                    const customSplit = customSplits.find(split => split.participantId === participant.id);
+                    const amount = customSplit?.amount || 0;
+                    
+                    return (
+                      <View key={participant.id} style={styles.customSplitItem}>
+                        <View style={styles.participantInfo}>
+                          <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
+                            <Text style={[styles.avatarText, { color: theme.colors.surface }]}>
+                              {participant.name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={[styles.participantName, { color: theme.colors.text }]}>
+                            {participant.name}
+                          </Text>
+                        </View>
+                        
+                        <View style={styles.amountInputRow}>
+                          <View style={[styles.currencySymbolContainer, { 
+                            backgroundColor: theme.colors.primary + '15',
+                            marginRight: 8,
+                          }]}>
+                            <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
+                              {selectedCurrency.symbol}
+                            </Text>
+                          </View>
+                          <Input
+                            placeholder="0.00"
+                            value={amount > 0 ? amount.toString() : ''}
+                            onChangeText={(text) => {
+                              const newAmount = parseFloat(text) || 0;
+                              setCustomSplits(prev => {
+                                const filtered = prev.filter(split => split.participantId !== participant.id);
+                                return [...filtered, { participantId: participant.id, amount: newAmount }];
+                              });
+                            }}
+                            keyboardType="numeric"
+                            style={styles.customSplitInput}
+                          />
+                        </View>
+                      </View>
+                    );
+                  })}
+              </View>
+              
+              <View style={styles.splitSummary}>
+                <View style={styles.splitSummaryRow}>
+                  <Text style={[styles.splitSummaryLabel, { color: theme.colors.textSecondary }]}>
+                    Total Split:
+                  </Text>
+                  <Text style={[styles.splitSummaryAmount, { color: theme.colors.text }]}>
+                    {selectedCurrency.symbol}{customSplits.reduce((sum, split) => sum + split.amount, 0).toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.splitSummaryRow}>
+                  <Text style={[styles.splitSummaryLabel, { color: theme.colors.textSecondary }]}>
+                    Expense Total:
+                  </Text>
+                  <Text style={[styles.splitSummaryAmount, { color: theme.colors.text }]}>
+                    {selectedCurrency.symbol}{amount || '0.00'}
+                  </Text>
+                </View>
+                {Math.abs(customSplits.reduce((sum, split) => sum + split.amount, 0) - (parseFloat(amount) || 0)) > 0.01 && (
+                  <Text style={[styles.splitError, { color: theme.colors.error }]}>
+                    Split amounts must equal the total expense amount
+                  </Text>
+                )}
               </View>
             </Card>
           )}
@@ -630,14 +788,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   groupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 2,
+    marginBottom: 8,
   },
   groupLabel: {
     fontSize: 16,
     fontWeight: '500',
+    flex: 1,
   },
   participantsList: {
     flexDirection: 'row',
@@ -723,12 +885,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  currencySymbol: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginRight: 12,
-    minWidth: 30,
-  },
   currencyDetails: {
     flex: 1,
   },
@@ -798,6 +954,137 @@ const styles = StyleSheet.create({
   currencyItemName: {
     fontSize: 14,
     marginTop: 2,
+  },
+  amountContainer: {
+    marginBottom: 16,
+  },
+  amountLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  currencySymbolContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  currencySymbol: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  amountInput: {
+    flex: 1,
+    borderWidth: 0,
+    margin: 0,
+    paddingHorizontal: 16,
+  },
+  groupColorIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  customSplitHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  fillEqualButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  fillEqualText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  customSplitList: {
+    gap: 16,
+  },
+  customSplitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  participantInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  participantName: {
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 1,
+  },
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    maxWidth: 150,
+  },
+  customSplitInput: {
+    flex: 1,
+    margin: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  splitSummary: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  splitSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  splitSummaryLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  splitSummaryAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  splitError: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
 

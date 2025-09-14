@@ -15,6 +15,7 @@ const HomeScreen: React.FC<NavigationProps> = ({ navigation }) => {
     expenses, 
     groups, 
     balances, 
+    user,
     getTotalBalance, 
     getRecentExpenses, 
     getExpensesByCategory,
@@ -31,12 +32,14 @@ const HomeScreen: React.FC<NavigationProps> = ({ navigation }) => {
   }, [refreshData]);
 
   const totalBalance = getTotalBalance();
-  const recentExpenses = getRecentExpenses(5);
+  const recentExpenses = getRecentExpenses(3); // Show only 3 recent expenses
+  const allExpenses = getRecentExpenses(); // Get all expenses for "See All"
   const categoryTotals = getExpensesByCategory();
   const totalThisMonth = Object.values(categoryTotals).reduce((sum, amount) => sum + amount, 0);
 
-  const formatAmount = (amount: number, currency: string = 'USD') => {
-    return formatCurrency(Math.abs(amount), currency);
+  const formatAmount = (amount: number, currency?: string) => {
+    const defaultCurrency = user?.defaultCurrency || 'USD';
+    return formatCurrency(Math.abs(amount), currency || defaultCurrency);
   };
 
   return (
@@ -91,38 +94,53 @@ const HomeScreen: React.FC<NavigationProps> = ({ navigation }) => {
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               Recent Expenses
             </Text>
-            <TouchableOpacity>
-              <Text style={[styles.seeAllText, { color: theme.colors.primary }]}>
-                See All
-              </Text>
-            </TouchableOpacity>
+            {allExpenses.length > 3 && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('AllExpenses')}
+                style={styles.seeAllButton}
+              >
+                <Text style={[styles.seeAllText, { color: theme.colors.primary }]}>
+                  See All ({allExpenses.length})
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
+              </TouchableOpacity>
+            )}
           </View>
           
           {recentExpenses.length > 0 ? (
-            recentExpenses.map((expense) => (
-              <Card 
-                key={expense.id} 
-                style={styles.expenseCard}
-                onPress={() => navigation.navigate('ExpenseDetail', { expenseId: expense.id })}
-              >
-                <View style={styles.expenseHeader}>
-                  <View style={styles.expenseInfo}>
-                    <Text style={[styles.expenseTitle, { color: theme.colors.text }]}>
-                      {expense.title}
-                    </Text>
-                    <Text style={[styles.expenseCategory, { color: theme.colors.textSecondary }]}>
-                      {expense.category}
+            <>
+              {recentExpenses.map((expense) => (
+                <Card 
+                  key={expense.id} 
+                  style={styles.expenseCard}
+                  onPress={() => navigation.navigate('ExpenseDetail', { expenseId: expense.id })}
+                >
+                  <View style={styles.expenseHeader}>
+                    <View style={styles.expenseInfo}>
+                      <Text style={[styles.expenseTitle, { color: theme.colors.text }]}>
+                        {expense.title}
+                      </Text>
+                      <Text style={[styles.expenseCategory, { color: theme.colors.textSecondary }]}>
+                        {expense.category}
+                      </Text>
+                    </View>
+                    <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
+                      {formatAmount(expense.amount, expense.currency)}
                     </Text>
                   </View>
-                  <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
-                    {formatAmount(expense.amount, expense.currency)}
+                  <Text style={[styles.expenseDate, { color: theme.colors.textSecondary }]}>
+                    {new Date(expense.createdAt).toLocaleDateString()}
+                  </Text>
+                </Card>
+              ))}
+              {allExpenses.length > 3 && (
+                <View style={styles.moreExpensesHint}>
+                  <Text style={[styles.moreExpensesText, { color: theme.colors.textSecondary }]}>
+                    Showing 3 of {allExpenses.length} expenses
                   </Text>
                 </View>
-                <Text style={[styles.expenseDate, { color: theme.colors.textSecondary }]}>
-                  {new Date(expense.createdAt).toLocaleDateString()}
-                </Text>
-              </Card>
-            ))
+              )}
+            </>
           ) : (
             <Card style={styles.emptyState}>
               <Ionicons name="receipt-outline" size={48} color={theme.colors.textSecondary} />
@@ -229,24 +247,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 20,
     marginBottom: 24,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     marginBottom: 4,
+    textAlign: 'center',
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 14,
   },
   statDivider: {
     width: 1,
-    height: 40,
-    marginHorizontal: 16,
+    height: 50,
+    marginHorizontal: 12,
   },
   section: {
     marginBottom: 24,
@@ -261,9 +285,23 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
   },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   seeAllText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  moreExpensesHint: {
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 8,
+  },
+  moreExpensesText: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   emptyState: {
     padding: 32,
@@ -311,6 +349,7 @@ const styles = StyleSheet.create({
   quickActions: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 4,
   },
   quickActionButton: {
     flex: 1,
