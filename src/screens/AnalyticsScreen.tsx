@@ -9,7 +9,14 @@ import Card from '../components/Card';
 
 const AnalyticsScreen: React.FC = () => {
   const { theme } = useTheme();
-  const { expenses, getExpensesByCategory, refreshData, user } = useApp();
+  const { 
+    expenses, 
+    getExpensesByCategory, 
+    getGroupExpensesByCategory, 
+    getPersonalExpensesByCategory, 
+    refreshData, 
+    user 
+  } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = React.useCallback(async () => {
@@ -18,8 +25,19 @@ const AnalyticsScreen: React.FC = () => {
     setRefreshing(false);
   }, [refreshData]);
 
-  const categoryData = getExpensesByCategory();
-  const chartData = Object.entries(categoryData).map(([category, amount]) => ({
+  const overallCategoryData = getExpensesByCategory();
+  const groupCategoryData = getGroupExpensesByCategory();
+  const personalCategoryData = getPersonalExpensesByCategory();
+
+  const overallChartData = Object.entries(overallCategoryData).map(([category, amount]) => ({
+    x: category.charAt(0).toUpperCase() + category.slice(1),
+    y: amount,
+  }));
+  const groupChartData = Object.entries(groupCategoryData).map(([category, amount]) => ({
+    x: category.charAt(0).toUpperCase() + category.slice(1),
+    y: amount,
+  }));
+  const personalChartData = Object.entries(personalCategoryData).map(([category, amount]) => ({
     x: category.charAt(0).toUpperCase() + category.slice(1),
     y: amount,
   }));
@@ -32,7 +50,9 @@ const AnalyticsScreen: React.FC = () => {
     }).format(amount);
   };
 
-  const totalSpent = Object.values(categoryData).reduce((sum, amount) => sum + amount, 0);
+  const totalSpent = Object.values(overallCategoryData).reduce((sum, amount) => sum + amount, 0);
+  const totalGroup = Object.values(groupCategoryData).reduce((sum, amount) => sum + amount, 0);
+  const totalPersonal = Object.values(personalCategoryData).reduce((sum, amount) => sum + amount, 0);
 
   // Chart colors
   const chartColors = [
@@ -53,6 +73,7 @@ const AnalyticsScreen: React.FC = () => {
     const centerX = size / 2;
     const centerY = size / 2;
     const radius = 80;
+    const localTotal = data.reduce((sum, item) => sum + item.y, 0);
     
     let cumulativePercentage = 0;
     
@@ -74,7 +95,7 @@ const AnalyticsScreen: React.FC = () => {
     return (
       <Svg width={size} height={size}>
         {data.map((item, index) => {
-          const percentage = (item.y / totalSpent) * 100;
+          const percentage = localTotal ? (item.y / localTotal) * 100 : 0;
           const startAngle = cumulativePercentage * 3.6;
           const endAngle = (cumulativePercentage + percentage) * 3.6;
           
@@ -153,7 +174,7 @@ const AnalyticsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top','left','right']}>
       <ScrollView 
         style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
@@ -182,15 +203,15 @@ const AnalyticsScreen: React.FC = () => {
 
             {/* Category Breakdown */}
             <Card style={styles.chartCard}>
-              <Text style={[styles.chartTitle, { color: theme.colors.text }]}>
-                Spending by Category
+              <Text style={[styles.chartTitle, { color: theme.colors.text }]}> 
+                Overall: Spending by Category
               </Text>
-              {chartData.length > 0 && (
+              {overallChartData.length > 0 && (
                 <View style={styles.chartContainer}>
-                  <PieChart data={chartData} colors={chartColors} />
+                  <PieChart data={overallChartData} colors={chartColors} />
                   {/* Legend */}
                   <View style={styles.legend}>
-                    {chartData.map((item, index) => (
+                    {overallChartData.map((item, index) => (
                       <View key={index} style={styles.legendItem}>
                         <View 
                           style={[
@@ -211,11 +232,11 @@ const AnalyticsScreen: React.FC = () => {
             {/* Bar Chart */}
             <Card style={styles.chartCard}>
               <Text style={[styles.chartTitle, { color: theme.colors.text }]}>
-                Category Comparison
+                Overall: Category Comparison
               </Text>
-              {chartData.length > 0 && (
+              {overallChartData.length > 0 && (
                 <View style={styles.chartContainer}>
-                  <BarChart data={chartData} colors={chartColors} />
+                  <BarChart data={overallChartData} colors={chartColors} />
                 </View>
               )}
             </Card>
@@ -223,9 +244,9 @@ const AnalyticsScreen: React.FC = () => {
             {/* Category List */}
             <Card style={styles.categoryListCard}>
               <Text style={[styles.chartTitle, { color: theme.colors.text }]}>
-                Category Details
+                Overall: Category Details
               </Text>
-              {Object.entries(categoryData).map(([category, amount]) => (
+              {Object.entries(overallCategoryData).map(([category, amount]) => (
                 <View key={category} style={styles.categoryItem}>
                   <View style={styles.categoryInfo}>
                     <Text style={[styles.categoryName, { color: theme.colors.text }]}>
@@ -241,13 +262,82 @@ const AnalyticsScreen: React.FC = () => {
                         styles.categoryBarFill, 
                         { 
                           backgroundColor: theme.colors.primary,
-                          width: `${(amount / totalSpent) * 100}%`,
+                          width: `${totalSpent ? (amount / totalSpent) * 100 : 0}%`,
                         }
                       ]} 
                     />
                   </View>
                 </View>
               ))}
+            </Card>
+
+            {/* Group vs Personal Totals */}
+            <Card style={styles.totalSplitCard}>
+              <View style={styles.splitRow}>
+                <Text style={[styles.splitLabel, { color: theme.colors.textSecondary }]}>Group</Text>
+                <Text style={[styles.splitAmount, { color: theme.colors.primary }]}>{formatCurrency(totalGroup)}</Text>
+              </View>
+              <View style={styles.splitRow}>
+                <Text style={[styles.splitLabel, { color: theme.colors.textSecondary }]}>Personal</Text>
+                <Text style={[styles.splitAmount, { color: theme.colors.primary }]}>{formatCurrency(totalPersonal)}</Text>
+              </View>
+            </Card>
+
+            {/* Group Only */}
+            <Card style={styles.chartCard}>
+              <Text style={[styles.chartTitle, { color: theme.colors.text }]}> 
+                Group: Spending by Category
+              </Text>
+              {groupChartData.length > 0 ? (
+                <View style={styles.chartContainer}>
+                  <PieChart data={groupChartData} colors={chartColors} />
+                  <View style={styles.legend}>
+                    {groupChartData.map((item, index) => (
+                      <View key={`g-${index}`} style={styles.legendItem}>
+                        <View 
+                          style={[
+                            styles.legendColor, 
+                            { backgroundColor: chartColors[index % chartColors.length] }
+                          ]} 
+                        />
+                        <Text style={[styles.legendText, { color: theme.colors.text }]}>
+                          {item.x}: {formatCurrency(item.y)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No group expenses</Text>
+              )}
+            </Card>
+
+            <Card style={styles.chartCard}>
+              <Text style={[styles.chartTitle, { color: theme.colors.text }]}> 
+                Personal: Spending by Category
+              </Text>
+              {personalChartData.length > 0 ? (
+                <View style={styles.chartContainer}>
+                  <PieChart data={personalChartData} colors={chartColors} />
+                  <View style={styles.legend}>
+                    {personalChartData.map((item, index) => (
+                      <View key={`p-${index}`} style={styles.legendItem}>
+                        <View 
+                          style={[
+                            styles.legendColor, 
+                            { backgroundColor: chartColors[index % chartColors.length] }
+                          ]} 
+                        />
+                        <Text style={[styles.legendText, { color: theme.colors.text }]}>
+                          {item.x}: {formatCurrency(item.y)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No personal expenses</Text>
+              )}
             </Card>
           </>
         ) : (
@@ -331,6 +421,23 @@ const styles = StyleSheet.create({
   categoryListCard: {
     padding: 16,
     marginBottom: 16,
+  },
+  totalSplitCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  splitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  splitLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  splitAmount: {
+    fontSize: 18,
+    fontWeight: '700',
   },
   categoryItem: {
     marginBottom: 16,

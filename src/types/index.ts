@@ -52,6 +52,7 @@ export interface Expense {
   updatedAt: Date;
   isSettled: boolean;
   receipt?: string;
+  expenseDate?: Date; // user-chosen date of expense
 }
 
 export interface ExpenseParticipant {

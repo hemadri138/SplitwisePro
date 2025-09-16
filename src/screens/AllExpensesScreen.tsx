@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -25,7 +26,30 @@ const AllExpensesScreen: React.FC<NavigationProps> = ({ navigation }) => {
     setRefreshing(false);
   }, [refreshData]);
 
-  const allExpenses = getRecentExpenses(); // Get all expenses
+  const [filterMode, setFilterMode] = React.useState<'all' | 'day' | 'month'>('all');
+  const [filterDate, setFilterDate] = React.useState<Date>(new Date());
+  const [showDatePicker, setShowDatePicker] = React.useState(false);
+
+  const allExpenses = React.useMemo(() => {
+    let list = getRecentExpenses();
+    if (filterMode === 'day') {
+      const y = filterDate.getFullYear();
+      const m = filterDate.getMonth();
+      const d = filterDate.getDate();
+      list = list.filter(e => {
+        const dt = e.expenseDate ? new Date(e.expenseDate) : new Date(e.createdAt);
+        return dt.getFullYear() === y && dt.getMonth() === m && dt.getDate() === d;
+      });
+    } else if (filterMode === 'month') {
+      const y = filterDate.getFullYear();
+      const m = filterDate.getMonth();
+      list = list.filter(e => {
+        const dt = e.expenseDate ? new Date(e.expenseDate) : new Date(e.createdAt);
+        return dt.getFullYear() === y && dt.getMonth() === m;
+      });
+    }
+    return list;
+  }, [getRecentExpenses, filterMode, filterDate]);
 
   const formatAmount = (amount: number, currency?: string) => {
     const defaultCurrency = user?.defaultCurrency || 'USD';
@@ -85,6 +109,36 @@ const AllExpensesScreen: React.FC<NavigationProps> = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        {/* Filters */}
+        <Card style={styles.summaryCard}>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+            <TouchableOpacity style={[styles.filterChip, { borderColor: theme.colors.border, backgroundColor: filterMode === 'all' ? theme.colors.primary + '20' : 'transparent' }]} onPress={() => setFilterMode('all')}>
+              <Text style={{ color: theme.colors.text }}>All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.filterChip, { borderColor: theme.colors.border, backgroundColor: filterMode === 'day' ? theme.colors.primary + '20' : 'transparent' }]} onPress={() => setFilterMode('day')}>
+              <Text style={{ color: theme.colors.text }}>Day</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.filterChip, { borderColor: theme.colors.border, backgroundColor: filterMode === 'month' ? theme.colors.primary + '20' : 'transparent' }]} onPress={() => setFilterMode('month')}>
+              <Text style={{ color: theme.colors.text }}>Month</Text>
+            </TouchableOpacity>
+          </View>
+          {(filterMode === 'day' || filterMode === 'month') && (
+            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.dateButton, { borderColor: theme.colors.border }]}> 
+              <Text style={{ color: theme.colors.text }}>{filterDate.toDateString()}</Text>
+            </TouchableOpacity>
+          )}
+          {showDatePicker && (
+            <DateTimePicker
+              value={filterDate}
+              mode="date"
+              display="default"
+              onChange={(event: any, date?: Date) => {
+                setShowDatePicker(false);
+                if (date) setFilterDate(date);
+              }}
+            />
+          )}
+        </Card>
         {/* Summary */}
         <Card style={styles.summaryCard}>
           <View style={styles.summaryRow}>
@@ -242,6 +296,18 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  dateButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   section: {
     marginBottom: 24,

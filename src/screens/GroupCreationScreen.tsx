@@ -82,6 +82,7 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+  const [friendsDropdownVisible, setFriendsDropdownVisible] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(getDefaultCurrency());
   const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
@@ -301,31 +302,74 @@ const GroupCreationScreen: React.FC = ({ navigation }: any) => {
 
         <Card style={styles.friendsCard}>
           <View style={styles.friendsHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Select Friends
-            </Text>
-            <Text style={[styles.selectedCount, { color: theme.colors.textSecondary }]}>
-              {selectedFriends.length} selected
-            </Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Members</Text>
+            <TouchableOpacity onPress={() => setFriendsDropdownVisible(true)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="add" size={20} color={theme.colors.primary} />
+                <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Add Friends</Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
-          {friends.length > 0 ? (
-            <FlatList
-              data={friends}
-              renderItem={renderFriend}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              style={styles.friendsList}
-            />
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={48} color={theme.colors.textSecondary} />
-              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                No friends available. Add friends first to create a group.
-              </Text>
-            </View>
-          )}
+          <Text style={[styles.selectedCount, { color: theme.colors.textSecondary }]}>
+            {selectedFriends.length} selected
+          </Text>
+
+          {/* Selected friends preview */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            {selectedFriends.map(id => {
+              const f = friends.find(fr => fr.id === id);
+              if (!f) return null;
+              return (
+                <View key={id} style={[styles.participantChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}> 
+                  <Text style={{ color: theme.colors.text }}>{f.name}</Text>
+                </View>
+              );
+            })}
+          </View>
         </Card>
+
+        {/* Friends dropdown modal */}
+        <Modal visible={friendsDropdownVisible} transparent animationType="slide" onRequestClose={() => setFriendsDropdownVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}> 
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Add Friends</Text>
+                <TouchableOpacity onPress={() => setFriendsDropdownVisible(false)} style={styles.closeButton}>
+                  <Ionicons name="close" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              {friends.length > 0 ? (
+                <FlatList
+                  data={friends}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[styles.currencyItem, { borderBottomColor: '#F3F4F6' }]}
+                      onPress={() => {
+                        handleFriendToggle(item.id);
+                      }}
+                    >
+                      <Text style={{ color: theme.colors.text }}>{item.name}</Text>
+                      {selectedFriends.includes(item.id) && (
+                        <Ionicons name="checkmark" size={20} color={theme.colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  style={styles.currencyList}
+                />
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="people-outline" size={48} color={theme.colors.textSecondary} />
+                  <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No friends available.</Text>
+                </View>
+              )}
+              <View style={{ padding: 16 }}>
+                <Button title="Done" onPress={() => setFriendsDropdownVisible(false)} />
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <View style={styles.buttonContainer}>
           <Button
@@ -484,6 +528,12 @@ const styles = StyleSheet.create({
   },
   selectedCount: {
     fontSize: 14,
+  },
+  participantChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   friendsList: {
     maxHeight: 300,

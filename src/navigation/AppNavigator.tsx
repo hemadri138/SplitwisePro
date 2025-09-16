@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Import screens (we'll create these next)
 import HomeScreen from '../screens/HomeScreen';
@@ -129,6 +130,7 @@ const ProfileStack = () => (
 
 const AppNavigator: React.FC = () => {
   const { theme, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <NavigationContainer>
@@ -159,9 +161,9 @@ const AppNavigator: React.FC = () => {
             backgroundColor: theme.colors.surface,
             borderTopColor: theme.colors.border,
             borderTopWidth: 1,
-            paddingBottom: 8,
+            paddingBottom: Math.max(8, insets.bottom),
             paddingTop: 8,
-            height: 60,
+            height: 60 + Math.max(0, insets.bottom - 8),
           },
           tabBarLabelStyle: {
             fontSize: 12,

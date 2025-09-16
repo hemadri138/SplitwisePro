@@ -17,6 +17,8 @@ interface AppContextType {
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateExpense: (expenseId: string, updates: Partial<Expense>) => Promise<void>;
   deleteExpense: (expenseId: string) => Promise<void>;
+  settleGroup: (groupId: string) => Promise<void>;
+  settleBetweenUsers: (params: { groupId: string; fromUserId: string; toUserId: string; amount: number }) => Promise<void>;
   
   addGroup: (group: Omit<Group, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateGroup: (groupId: string, updates: Partial<Group>) => Promise<void>;
@@ -31,6 +33,8 @@ interface AppContextType {
   getTotalBalance: () => number;
   getRecentExpenses: (limit?: number) => Expense[];
   getExpensesByCategory: () => Record<string, number>;
+  getGroupExpensesByCategory: () => Record<string, number>;
+  getPersonalExpensesByCategory: () => Record<string, number>;
   
   // Refresh
   refreshData: () => Promise<void>;
@@ -90,24 +94,23 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const balances = React.useMemo(() => {
     const balanceMap = new Map<string, Balance>();
     
-    expenses.forEach(expense => {
-      expense.participants.forEach(participant => {
-        const current = balanceMap.get(participant.userId) || {
-          userId: participant.userId,
-          name: participant.name,
-          amount: 0,
-        };
-        
-        if (expense.paidBy === participant.userId) {
-          // This person paid, so they are owed money
-          current.amount -= participant.amount;
-        } else {
-          // This person owes money
-          current.amount += participant.amount;
-        }
-        
-        balanceMap.set(participant.userId, current);
-      });
+    expenses
+      .filter(expense => !expense.isSettled)
+      .forEach(expense => {
+        expense.participants.forEach(participant => {
+          const current = balanceMap.get(participant.userId) || {
+            userId: participant.userId,
+            name: participant.name,
+            amount: 0,
+          };
+
+          // Net change = share owed minus amount paid
+          const amountPaid = expense.paidBy === participant.userId ? expense.amount : 0;
+          const netDelta = participant.amount - amountPaid;
+
+          current.amount += netDelta;
+          balanceMap.set(participant.userId, current);
+        });
     });
     
     return Array.from(balanceMap.values());
@@ -115,7 +118,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const groupBalances = React.useMemo(() => {
     return groups.map(group => {
-      const groupExpenses = expenses.filter(expense => expense.groupId === group.id);
+      const groupExpenses = expenses.filter(expense => expense.groupId === group.id && !expense.isSettled);
       const groupBalanceMap = new Map<string, Balance>();
       
       groupExpenses.forEach(expense => {
@@ -125,13 +128,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             name: participant.name,
             amount: 0,
           };
-          
-          if (expense.paidBy === participant.userId) {
-            current.amount -= participant.amount;
-          } else {
-            current.amount += participant.amount;
-          }
-          
+
+          const amountPaid = expense.paidBy === participant.userId ? expense.amount : 0;
+          const netDelta = participant.amount - amountPaid;
+
+          current.amount += netDelta;
           groupBalanceMap.set(participant.userId, current);
         });
       });
@@ -194,6 +195,56 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setExpenses(prev => prev.filter(expense => expense.id !== expenseId));
     } catch (error) {
       console.error('Error deleting expense:', error);
+      throw error;
+    }
+  };
+
+  const settleGroup = async (groupId: string) => {
+    try {
+      const groupExpenseIds = expenses
+        .filter(e => e.groupId === groupId && !e.isSettled)
+        .map(e => e.id);
+      await Promise.all(
+        groupExpenseIds.map(id => StorageService.updateExpense(id, { isSettled: true, updatedAt: new Date() }))
+      );
+      setExpenses(prev => prev.map(e => groupExpenseIds.includes(e.id) ? { ...e, isSettled: true, updatedAt: new Date() } : e));
+    } catch (error) {
+      console.error('Error settling group:', error);
+      throw error;
+    }
+  };
+
+  const settleBetweenUsers = async ({ groupId, fromUserId, toUserId, amount }: { groupId: string; fromUserId: string; toUserId: string; amount: number }) => {
+    // Represent a settlement as a zero-net transfer expense in the group
+    // fromUser pays 'amount' to toUser, splitting only between them
+    try {
+      const payerId = fromUserId;
+      const payeeId = toUserId;
+
+      const payerName = groups
+        .find(g => g.id === groupId)?.members.find(m => m.userId === payerId)?.name
+        || user?.name || 'Payer';
+      const payeeName = groups
+        .find(g => g.id === groupId)?.members.find(m => m.userId === payeeId)?.name
+        || 'Payee';
+
+      await addExpense({
+        title: 'Settlement',
+        amount,
+        category: 'other',
+        description: `Settlement between ${payerName} and ${payeeName}`,
+        paidBy: payerId,
+        groupId,
+        participants: [
+          { userId: payerId, name: payerName, amount: amount, isSettled: true },
+          { userId: payeeId, name: payeeName, amount: 0, isSettled: true },
+        ],
+        splitType: 'custom',
+        currency: groups.find(g => g.id === groupId)?.currency || user?.defaultCurrency || 'USD',
+        isSettled: true,
+      });
+    } catch (error) {
+      console.error('Error settling between users:', error);
       throw error;
     }
   };
@@ -309,6 +360,28 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     return categoryTotals;
   };
 
+  const getGroupExpensesByCategory = () => {
+    const categoryTotals: Record<string, number> = {};
+    expenses
+      .filter(expense => !!expense.groupId)
+      .forEach(expense => {
+        const category = expense.category;
+        categoryTotals[category] = (categoryTotals[category] || 0) + expense.amount;
+      });
+    return categoryTotals;
+  };
+
+  const getPersonalExpensesByCategory = () => {
+    const categoryTotals: Record<string, number> = {};
+    expenses
+      .filter(expense => !expense.groupId)
+      .forEach(expense => {
+        const category = expense.category;
+        categoryTotals[category] = (categoryTotals[category] || 0) + expense.amount;
+      });
+    return categoryTotals;
+  };
+
   const refreshData = async () => {
     await loadData();
   };
@@ -323,6 +396,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     addExpense,
     updateExpense,
     deleteExpense,
+    settleGroup,
+    settleBetweenUsers,
     addGroup,
     updateGroup,
     deleteGroup,
@@ -333,6 +408,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     getTotalBalance,
     getRecentExpenses,
     getExpensesByCategory,
+    getGroupExpensesByCategory,
+    getPersonalExpensesByCategory,
     refreshData,
   };
 

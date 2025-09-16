@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Alert, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -13,13 +13,16 @@ import Button from '../components/Button';
 
 const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
   const { theme, settings } = useTheme();
-  const { groups, groupBalances, getExpensesByGroup, user, addMemberToGroup, removeMemberFromGroup, deleteGroup } = useApp();
+  const { groups, groupBalances, getExpensesByGroup, user, addMemberToGroup, removeMemberFromGroup, deleteGroup, settleGroup, settleBetweenUsers } = useApp();
   const { friends, getFriendById } = useFriends();
   
   const groupId = route.params?.groupId;
   const group = groups.find(g => g.id === groupId);
   const groupBalance = groupBalances.find(gb => gb.groupId === groupId);
   const groupExpenses = getExpensesByGroup(groupId);
+  const [settleModalVisible, setSettleModalVisible] = React.useState(false);
+  const [selectedUserId, setSelectedUserId] = React.useState<string | null>(null);
+  const [settleAmount, setSettleAmount] = React.useState<string>('');
 
   const formatAmount = (amount: number, currency?: string) => {
     const defaultCurrency = user?.defaultCurrency || 'USD';
@@ -55,6 +58,39 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
     }
 
     return members;
+  };
+
+  const handleSettleUp = () => {
+    setSettleModalVisible(true);
+  };
+
+  const submitSettlement = async () => {
+    if (!group || !selectedUserId) return;
+    const amountNum = parseFloat(settleAmount);
+    if (!amountNum || amountNum <= 0) {
+      Alert.alert('Invalid amount', 'Enter a valid amount to settle.');
+      return;
+    }
+    try {
+      const currentUserId = user?.id || '';
+      // Determine direction: if selected user owes (positive), then they pay current user; else current user pays them
+      const selectedBalance = groupBalance?.balances.find(b => b.userId === selectedUserId)?.amount || 0;
+      const currentUserBalance = groupBalance?.balances.find(b => b.userId === currentUserId)?.amount || 0;
+      let fromUserId = currentUserId;
+      let toUserId = selectedUserId;
+      if (selectedBalance > 0) {
+        // selected user owes; they pay current user
+        fromUserId = selectedUserId;
+        toUserId = currentUserId;
+      }
+      await settleBetweenUsers({ groupId: group.id, fromUserId, toUserId, amount: amountNum });
+      setSettleModalVisible(false);
+      setSelectedUserId(null);
+      setSettleAmount('');
+      Alert.alert('Success', 'Settlement recorded');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to record settlement');
+    }
   };
 
   const getAvailableFriendsToAdd = () => {
@@ -203,6 +239,44 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
           )}
         </Card>
 
+        {/* Actions */}
+        <View style={styles.actionsRow}>
+          <Button title="Settle Up" onPress={handleSettleUp} />
+        </View>
+
+        {/* Settle Up Modal */}
+        <Modal visible={settleModalVisible} transparent animationType="slide" onRequestClose={() => setSettleModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}> 
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Settle Up</Text>
+              <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>Select person</Text>
+              <View style={styles.userList}>
+                {groupBalance?.balances
+                  .filter(b => b.userId !== (user?.id || ''))
+                  .map((b) => (
+                    <TouchableOpacity key={b.userId} style={[styles.userItem, { borderColor: theme.colors.border, backgroundColor: selectedUserId === b.userId ? theme.colors.primary + '20' : 'transparent' }]} onPress={() => setSelectedUserId(b.userId)}>
+                      <Text style={{ color: theme.colors.text }}>{b.name}</Text>
+                      <Text style={{ color: theme.colors.textSecondary }}>{b.amount.toFixed(2)}</Text>
+                    </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>Amount</Text>
+              <TextInput
+                value={settleAmount}
+                onChangeText={setSettleAmount}
+                placeholder="0.00"
+                keyboardType="numeric"
+                style={[styles.amountInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
+                placeholderTextColor={theme.colors.textSecondary}
+              />
+              <View style={styles.modalButtons}>
+                <Button title="Cancel" variant="outline" onPress={() => setSettleModalVisible(false)} style={{ flex: 1 }} />
+                <Button title="Settle" onPress={submitSettlement} style={{ flex: 1 }} />
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* Balance Summary */}
         {groupBalance && groupBalance.balances.length > 0 && (
           <Card style={styles.balanceCard}>
@@ -338,6 +412,55 @@ const GroupDetailScreen: React.FC<NavigationProps> = ({ navigation, route }) => 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  actionsRow: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    padding: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  userList: {
+    maxHeight: 200,
+    marginBottom: 12,
+  },
+  userItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  amountInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
   },
   scrollView: {
     flex: 1,

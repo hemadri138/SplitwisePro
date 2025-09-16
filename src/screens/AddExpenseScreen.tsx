@@ -12,16 +12,18 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons, Entypo, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp } from '../contexts/AppContext';
 import { useFriends } from '../contexts/FriendsContext';
-import { NavigationProps, ExpenseCategory, SplitType, ExpenseSplit, Currency } from '../types';
-import { SUPPORTED_CURRENCIES, getDefaultCurrency, formatCurrency } from '../utils/currency';
+import { NavigationProps, ExpenseCategory, SplitType, ExpenseSplit } from '../types';
+import { formatCurrency, getCurrencyByCode } from '../utils/currency';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 
 const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
   const { theme, settings } = useTheme();
@@ -46,11 +48,12 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
   );
   const [customSplits, setCustomSplits] = useState<ExpenseSplit[]>([]);
   const [payer, setPayer] = useState<string>(existingExpense?.paidBy || user?.id || 'current-user');
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(
-    existingExpense ? SUPPORTED_CURRENCIES.find(c => c.code === existingExpense.currency) || getDefaultCurrency() : getDefaultCurrency()
-  );
-  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const defaultCurrencyCode = user?.defaultCurrency || 'USD';
+  const currencySymbol = getCurrencyByCode(defaultCurrencyCode)?.symbol || '$';
   const [isLoading, setIsLoading] = useState(false);
+  const [expenseDate, setExpenseDate] = useState<Date>(existingExpense?.expenseDate ? new Date(existingExpense.expenseDate) : new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [receiptUri, setReceiptUri] = useState<string | undefined>(existingExpense?.receipt);
 
   const categories: { 
     key: ExpenseCategory; 
@@ -166,7 +169,9 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
           groupId: selectedGroup || undefined,
           participants: expenseParticipants,
           splitType,
-          currency: selectedCurrency.code,
+          currency: defaultCurrencyCode,
+          receipt: receiptUri,
+          expenseDate,
         });
       } else {
         await addExpense({
@@ -178,8 +183,10 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
           groupId: selectedGroup || undefined,
           participants: expenseParticipants,
           splitType,
-          currency: selectedCurrency.code,
+          currency: defaultCurrencyCode,
           isSettled: false,
+          receipt: receiptUri,
+          expenseDate,
         });
       }
 
@@ -196,6 +203,33 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
       console.error('Error adding expense:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const requestMediaPermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'We need access to your photos to scan receipts.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleScanReceipt = async () => {
+    const ok = await requestMediaPermissions();
+    if (!ok) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      base64: false,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const uri = result.assets[0].uri;
+      setReceiptUri(uri);
+      if (settings.hapticFeedback) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      // Optional: Add OCR integration here to auto-extract total
     }
   };
 
@@ -268,7 +302,7 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
                   borderRadius: 0,
                 }]}>
                   <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
-                    {selectedCurrency.symbol}
+                    {currencySymbol}
                   </Text>
                 </View>
                 <Input
@@ -282,35 +316,33 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
               </View>
             </View>
 
-            {/* Currency Selection */}
-            <View style={styles.currencySection}>
-              <Text style={[styles.currencyLabel, { color: theme.colors.text }]}>
-                Currency
-              </Text>
-              <TouchableOpacity
-                style={[styles.currencySelector, { 
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border 
-                }]}
-                onPress={() => setShowCurrencyModal(true)}
-              >
-                <View style={styles.currencyInfo}>
-                  <View style={[styles.currencySymbolContainer, { backgroundColor: theme.colors.primary + '15' }]}>
-                    <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
-                      {selectedCurrency.symbol}
-                    </Text>
-                  </View>
-                  <View style={styles.currencyDetails}>
-                    <Text style={[styles.currencyCode, { color: theme.colors.text }]}>
-                      {selectedCurrency.code}
-                    </Text>
-                    <Text style={[styles.currencyName, { color: theme.colors.textSecondary }]}>
-                      {selectedCurrency.name}
-                    </Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
+            {/* Date and Receipt */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Date</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.dateButton, { borderColor: theme.colors.border }]}> 
+                <Text style={{ color: theme.colors.text }}>
+                  {expenseDate.toDateString()}
+                </Text>
               </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={expenseDate}
+                  mode="date"
+                  display="default"
+                  onChange={(event: any, date?: Date) => {
+                    setShowDatePicker(false);
+                    if (date) setExpenseDate(date);
+                  }}
+                />
+              )}
+            </View>
+
+            {/* Receipt Scan */}
+            <View style={{ marginBottom: 16 }}>
+              <Button title={receiptUri ? 'Change Receipt' : 'Scan/Attach Receipt'} onPress={handleScanReceipt} variant="outline" />
+              {receiptUri && (
+                <Text style={{ marginTop: 8, color: theme.colors.textSecondary }}>Receipt attached</Text>
+              )}
             </View>
             
             <Input
@@ -565,7 +597,7 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
                             marginRight: 8,
                           }]}>
                             <Text style={[styles.currencySymbol, { color: theme.colors.primary }]}>
-                              {selectedCurrency.symbol}
+                              {currencySymbol}
                             </Text>
                           </View>
                           <Input
@@ -593,7 +625,7 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
                     Total Split:
                   </Text>
                   <Text style={[styles.splitSummaryAmount, { color: theme.colors.text }]}>
-                    {selectedCurrency.symbol}{customSplits.reduce((sum, split) => sum + split.amount, 0).toFixed(2)}
+                    {formatAmount(customSplits.reduce((sum, split) => sum + split.amount, 0), defaultCurrencyCode)}
                   </Text>
                 </View>
                 <View style={styles.splitSummaryRow}>
@@ -601,7 +633,7 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
                     Expense Total:
                   </Text>
                   <Text style={[styles.splitSummaryAmount, { color: theme.colors.text }]}>
-                    {selectedCurrency.symbol}{amount || '0.00'}
+                    {formatAmount(parseFloat(amount) || 0, defaultCurrencyCode)}
                   </Text>
                 </View>
                 {Math.abs(customSplits.reduce((sum, split) => sum + split.amount, 0) - (parseFloat(amount) || 0)) > 0.01 && (
@@ -666,72 +698,7 @@ const AddExpenseScreen: React.FC<NavigationProps> = ({ navigation, route }) => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Currency Selection Modal */}
-      <Modal
-        visible={showCurrencyModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCurrencyModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                Select Currency
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowCurrencyModal(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <FlatList
-              data={SUPPORTED_CURRENCIES}
-              keyExtractor={(item) => item.code}
-              renderItem={({ item }: { item: Currency }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.currencyItem,
-                    { 
-                      backgroundColor: selectedCurrency.code === item.code 
-                        ? theme.colors.primary + '20' 
-                        : 'transparent',
-                      borderColor: theme.colors.border 
-                    }
-                  ]}
-                  onPress={() => {
-                    setSelectedCurrency(item);
-                    setShowCurrencyModal(false);
-                    if (settings.hapticFeedback) {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }
-                  }}
-                >
-                  <View style={styles.currencyItemInfo}>
-                    <Text style={[styles.currencyItemSymbol, { color: theme.colors.primary }]}>
-                      {item.symbol}
-                    </Text>
-                    <View style={styles.currencyItemDetails}>
-                      <Text style={[styles.currencyItemCode, { color: theme.colors.text }]}>
-                        {item.code}
-                      </Text>
-                      <Text style={[styles.currencyItemName, { color: theme.colors.textSecondary }]}>
-                        {item.name}
-                      </Text>
-                    </View>
-                  </View>
-                  {selectedCurrency.code === item.code && (
-                    <Ionicons name="checkmark" size={20} color={theme.colors.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
-              style={styles.currencyList}
-            />
-          </View>
-        </View>
-      </Modal>
+      {/* Currency Selection Modal removed */}
     </SafeAreaView>
   );
 };
